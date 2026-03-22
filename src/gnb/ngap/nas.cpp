@@ -21,43 +21,104 @@
 #include <asn/ngap/ASN_NGAP_RerouteNASRequest.h>
 #include <asn/ngap/ASN_NGAP_UplinkNASTransport.h>
 #include <ue/nas/enc.hpp>
-#include "encode.hpp"
 #include <stdexcept>
 
+#include <string>
+#include <cstring>
 namespace nr::gnb
 {
 
-int32_t extractSliceInfoAndModifyPdu(OctetString &nasPdu) {
+
+
+
+
+static std::string StripTrailingStageTlv(OctetString &nasPdu)
+{
+    constexpr uint8_t IEI = 0x6F;
+    constexpr char PREFIX[] = "UE_STAGE=";
+
+    int len = nasPdu.length();
+    if (len < 2) return {};
+
+    const uint8_t *d = nasPdu.data();
+
+    int start = len - 257;
+    if (start < 0) start = 0;
+
+    for (int pos = len - 2; pos >= start; --pos)
+    {
+        if (d[pos] != IEI) continue;
+
+        int L = d[pos + 1];
+        if (L < 0 || L > 255) continue;
+        if (pos + 2 + L != len) continue; // musi kończyć się dokładnie na końcu PDU
+
+        if (L < (int)sizeof(PREFIX) - 1) continue;
+        if (std::memcmp(d + pos + 2, PREFIX, sizeof(PREFIX) - 1) != 0) continue;
+
+        std::string stage(reinterpret_cast<const char*>(d + pos + 2), L);
+
+        nasPdu = nasPdu.subCopy(0, pos);
+
+        return stage;
+    }
+
+    return {};
+}
+
+int32_t extractSliceInfoAndModifyPdu(OctetString &nasPdu, std::string *outStage)
+{
+    std::string stage = StripTrailingStageTlv(nasPdu);
+    if (outStage) *outStage = stage;
+
     nas::RegistrationRequest *regRequest = nullptr;
     int32_t requestedSliceType = -1;
-    const uint8_t *m_data = nasPdu.data();
-    size_t m_dataLength = nasPdu.length(); 
-    OctetView octetView(m_data, m_dataLength);
-    auto nasMessage = nas::DecodeNasMessage(octetView);  
+
+    OctetView octetView(nasPdu.data(), nasPdu.length());
+    auto nasMessage = nas::DecodeNasMessage(octetView);
+
     if (nasMessage->epd == nas::EExtendedProtocolDiscriminator::MOBILITY_MANAGEMENT_MESSAGES)
     {
-        nas::MmMessage *mmMessage = dynamic_cast<nas::MmMessage *>(nasMessage.get());
+        auto *mmMessage = dynamic_cast<nas::MmMessage *>(nasMessage.get());
         if (mmMessage)
         {
-            nas::PlainMmMessage *plainMmMessage = dynamic_cast<nas::PlainMmMessage *>(mmMessage);
+            auto *plainMmMessage = dynamic_cast<nas::PlainMmMessage *>(mmMessage);
             if (plainMmMessage)
             {
                 regRequest = dynamic_cast<nas::RegistrationRequest *>(plainMmMessage);
                 if (regRequest)
                 {
-                    auto sz = regRequest->requestedNSSAI->sNssais.size();
-                    if (sz > 0) {
+                    // FIX: requestedNSSAI może być puste -> sprawdź zanim dereferencja
+                    if (regRequest->requestedNSSAI && !regRequest->requestedNSSAI->sNssais.empty())
+                    {
                         requestedSliceType = static_cast<uint8_t>(regRequest->requestedNSSAI->sNssais[0].sst);
                     }
                 }
             }
         }
     }
-    if (regRequest && regRequest->requestedNSSAI) 
-        regRequest->requestedNSSAI = std::nullopt;  
+
+    if (regRequest && regRequest->requestedNSSAI)
+        regRequest->requestedNSSAI = std::nullopt;
 
     OctetString modifiedNasPdu;
     nas::EncodeNasMessage(*nasMessage, modifiedNasPdu);
+    if (!stage.empty())
+    {
+        constexpr uint8_t IEI = 0x6F;
+
+        OctetString tlv;
+        int L = (int)stage.size();
+        if (L > 255) L = 255;
+
+        tlv.appendOctet(IEI);
+        tlv.appendOctet((uint8_t)L);
+        for (int i = 0; i < L; ++i)
+            tlv.appendOctet((uint8_t)stage[i]);
+
+        modifiedNasPdu.append(tlv);
+    }
+
     nasPdu = std::move(modifiedNasPdu);
     return requestedSliceType;
 }
@@ -65,8 +126,12 @@ int32_t extractSliceInfoAndModifyPdu(OctetString &nasPdu) {
 void NgapTask::handleInitialNasTransport(int ueId, OctetString &nasPdu, int64_t rrcEstablishmentCause,
                                             const std::optional<GutiMobileIdentity> &sTmsi)
 {
-    int32_t requestedSliceType = extractSliceInfoAndModifyPdu(nasPdu);
+   std::string stage;
+   int32_t requestedSliceType = extractSliceInfoAndModifyPdu(nasPdu, &stage);
 
+   if (!stage.empty()){
+        m_logger->info("UE[%d] stage TLV: %s", ueId, stage.c_str());
+    }
     m_logger->debug("Initial NAS message received from UE[%d]", ueId);
 
     if (m_ueCtx.count(ueId))

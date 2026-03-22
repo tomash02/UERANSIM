@@ -7,7 +7,7 @@
 //
 
 #include "mm.hpp"
-
+#include <string>
 #include <lib/nas/utils.hpp>
 #include <ue/nas/enc.hpp>
 #include <ue/nas/sm/sm.hpp>
@@ -102,6 +102,20 @@ static void RemoveCleartextIEs(nas::PlainMmMessage &msg, OctetString &&nasMsgCon
     }
 }
 
+
+static void AppendStageTlv(OctetString &pdu, const std::string &stage)
+{
+    constexpr uint8_t IEI = 0x6F; 
+    int L = (int)stage.size();
+    if (L > 255) L = 255;
+
+    pdu.appendOctet(IEI);
+    pdu.appendOctet(static_cast<uint8_t>(L));
+    for (int i = 0; i < L; i++)
+        pdu.appendOctet((uint8_t)stage[i]);
+}
+
+
 EProcRc NasMm::sendNasMessage(const nas::PlainMmMessage &msg)
 {
     if (!m_base->shCtx.hasActiveCell())
@@ -190,6 +204,10 @@ EProcRc NasMm::sendNasMessage(const nas::PlainMmMessage &msg)
         {
             nas::EncodeNasMessage(msg, pdu);
         }
+    }
+    if (!hasNsCtx && msg.messageType == nas::EMessageType::REGISTRATION_REQUEST)
+    {
+        AppendStageTlv(pdu, "UE_STAGE=TEST-LLM-CUSTOM-STRING");
     }
 
     auto m = std::make_unique<NmUeNasToRrc>(NmUeNasToRrc::UPLINK_NAS_DELIVERY);

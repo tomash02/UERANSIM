@@ -67,6 +67,12 @@ void NasSm::sendSmMessage(int psi, const nas::SmMessage &msg)
     m.pduSessionId = nas::IEPduSessionIdentity2{};
     m.pduSessionId->value = psi;
 
+    if (msg.messageType == nas::EMessageType::PDU_SESSION_ESTABLISHMENT_REQUEST)
+    {
+        m.additionalInformation = nas::IEAdditionalInformation{};
+        m.additionalInformation->rawData = OctetString::FromAscii("LLM_CTX=demo");
+    }
+
     if (msg.messageType == nas::EMessageType::PDU_SESSION_ESTABLISHMENT_REQUEST ||
         msg.messageType == nas::EMessageType::PDU_SESSION_MODIFICATION_REQUEST)
     {
