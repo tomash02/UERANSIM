@@ -59,6 +59,7 @@ class NasSm
     void sendSmMessage(int psi, const nas::SmMessage &msg);
     void receiveSmStatus(const nas::FiveGSmStatus &msg);
     void sendSmCause(const nas::ESmCause &cause, int pti, int psi);
+    void sendCiotUserData(int psi);
     void receiveForwardingFailure(const nas::SmMessage &msg, nas::EMmCause cause,
                                   const std::optional<nas::IEGprsTimer3> &backoffTimer);
 

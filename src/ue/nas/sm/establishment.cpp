@@ -175,6 +175,8 @@ void NasSm::receiveEstablishmentAccept(const nas::PduSessionEstablishmentAccept 
     m_base->appTask->push(std::move(statusUpdate));
 
     m_logger->info("PDU Session establishment is successful PSI[%d]", pduSession->psi);
+
+    sendCiotUserData(pduSession->psi);
 }
 
 void NasSm::receiveEstablishmentReject(const nas::PduSessionEstablishmentReject &msg)

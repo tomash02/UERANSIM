@@ -147,6 +147,24 @@ void NasSm::sendSmCause(const nas::ESmCause &cause, int pti, int psi)
     m_mm->deliverUlTransport(ulTransport, ENasTransportHint::FIVEG_SM_STATUS);
 }
 
+void NasSm::sendCiotUserData(int psi)
+{
+    nas::UlNasTransport m;
+
+    m.payloadContainerType.payloadContainerType = nas::EPayloadContainerType::CIOT_USER_DATA_CONTAINER;
+
+    m.payloadContainer.data = OctetString::FromAscii(
+        "{\"source\":\"ueransim\",\"event\":\"pdu_session_established\",\"container\":\"ciot_user_data\"}");
+
+    m.pduSessionId = nas::IEPduSessionIdentity2{};
+    m.pduSessionId->value = psi;
+
+    m_logger->info("Sending CIoT user data over UL NAS TRANSPORT PSI[%d]", psi);
+
+    m_mm->deliverUlTransport(m, ENasTransportHint::FIVEG_SM_STATUS);
+}
+
+
 void NasSm::receiveForwardingFailure(const nas::SmMessage &msg, nas::EMmCause cause,
                                      const std::optional<nas::IEGprsTimer3> &backoffTimer)
 {
