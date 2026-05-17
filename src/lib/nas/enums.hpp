@@ -624,6 +624,7 @@ enum class EPayloadContainerType
     UE_POLICY_CONTAINER = 0b0101,
     UE_PARAMETERS_UPDATE_TRANSPARENT_CONTAINER = 0b0110,
     MULTIPLE_PAYLOADS = 0b1111,
+    CIOT_USER_DATA_CONTAINER = 0b1000,
 };
 
 enum class ERejectedSNssaiCause
