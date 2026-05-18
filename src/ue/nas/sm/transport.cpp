@@ -9,7 +9,7 @@
 #include "sm.hpp"
 
 #include <stdexcept>
-
+#include <string>
 #include <lib/nas/utils.hpp>
 #include <ue/nas/mm/mm.hpp>
 
@@ -151,19 +151,27 @@ void NasSm::sendCiotUserData(int psi)
 {
     nas::UlNasTransport m;
 
-    m.payloadContainerType.payloadContainerType = nas::EPayloadContainerType::CIOT_USER_DATA_CONTAINER;
+    m.payloadContainerType.payloadContainerType =
+        nas::EPayloadContainerType::CIOT_USER_DATA_CONTAINER;
 
-    m.payloadContainer.data = OctetString::FromAscii(
-        "{\"source\":\"ueransim\",\"event\":\"pdu_session_established\",\"container\":\"ciot_user_data\"}");
+    constexpr std::size_t targetPayloadBytes = 60 * 1024;
+
+    std::string payload = "CIOT_60KB_TEST:";
+    payload.resize(targetPayloadBytes, 'A');
+
+    m.payloadContainer.data = OctetString::FromAscii(payload);
 
     m.pduSessionId = nas::IEPduSessionIdentity2{};
     m.pduSessionId->value = psi;
 
-    m_logger->info("Sending CIoT user data over UL NAS TRANSPORT PSI[%d]", psi);
+    m_logger->info(
+        "Sending CIoT user data over UL NAS TRANSPORT PSI[%d], bytes[%d]",
+        psi,
+        (int)payload.size()
+    );
 
     m_mm->deliverUlTransport(m, ENasTransportHint::FIVEG_SM_STATUS);
 }
-
 
 void NasSm::receiveForwardingFailure(const nas::SmMessage &msg, nas::EMmCause cause,
                                      const std::optional<nas::IEGprsTimer3> &backoffTimer)
