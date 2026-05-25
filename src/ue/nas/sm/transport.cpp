@@ -154,7 +154,7 @@ void NasSm::sendCiotUserData(int psi)
     m.payloadContainerType.payloadContainerType =
         nas::EPayloadContainerType::CIOT_USER_DATA_CONTAINER;
 
-    constexpr std::size_t targetPayloadBytes = 60 * 1024;
+    constexpr std::size_t targetPayloadBytes = 8 * 1024;
 
     std::string payload = "CIOT_60KB_TEST:";
     payload.resize(targetPayloadBytes, 'A');
