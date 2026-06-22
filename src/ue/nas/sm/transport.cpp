@@ -154,10 +154,10 @@ void NasSm::sendCiotUserData(int psi)
     m.payloadContainerType.payloadContainerType =
         nas::EPayloadContainerType::CIOT_USER_DATA_CONTAINER;
 
-    constexpr std::size_t targetPayloadBytes = 8 * 1024;
+    // constexpr std::size_t targetPayloadBytes = 1 * 1024;
 
-    std::string payload = "CIOT_60KB_TEST:";
-    payload.resize(targetPayloadBytes, 'A');
+    std::string payload = "CIOT_Lorem_Ipsum_TEST:Lorem ipsum dolor sit amet, consectetur adipiscing elit. Ut pharetra mattis fermentum. Aenean ac placerat odio. Curabitur sit amet fermentum nisl. Donec porttitor porta nisi, id auctor sem convallis ut. Integer aliquet nec mauris in sagittis. Fusce nec eros ut justo consequat sodales. Donec euismod a purus non congue. Fusce augue orci, fermentum nec facilisis eu, elementum et felis. Duis a nisi eu velit cursus facilisis. Praesent at vulputate mauris. Aliquam in diam non sapien pellentesque pulvinar. Donec molestie lectus sit amet ornare ultrices. Pellentesque ac est commodo, feugiat lectus nec, vestibulum sapien. Sed nisl dolor, accumsan a vestibulum ut, eleifend nec libero. In scelerisque laoreet tincidunt. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Cras tincidunt rutrum sapien ac hendrerit. Nullam volutpat enim non semper consectetur. In ac massa vel tortor lacinia tristique. Nullam rhoncus nulla pretium, tincidunt risus quis, pellentesque nibh. Phasellus lacinia vehicula orci sit amet feugiat. Praesent sit amet odio sed nisi pulvinar finibus. Proin blandit malesuada suscipit. Aliquam imperdiet tristique magna id iaculis. Curabitur magna justo, pulvinar in justo eget, ultrices tincidunt urna. Curabitur gravida nunc in aliquam ultrices. Proin tristique dolor sagittis risus sodales, eu iaculis ipsum interdum. Sed id sem auctor, ornare nibh sed, viverra dui. Fusce sed lectus dictum, tincidunt elit a, volutpat urna. Donec non massa lobortis, vulputate tortor vitae, iaculis quam. Quisque ut blandit felis, varius condimentum nunc. Vivamus auctor ligula quis nisl accumsan vulputate. Nam ac tortor nunc. Praesent maximus libero nulla, ac cursus nisi euismod condimentum. Cras at sem non urna accumsan mattis vel sed ligula. Ut quam leo, volutpat ut est vitae, molestie blandit nisi. Etiam elementum auctor dui ac elementum. Aliquam erat volutpat. Aenean vel ullamcorper nisi. Suspendisse pulvinar erat in augue bibendum vulputate. Phasellus facilisis augue lacus, eu efficitur mi faucibus at. Vivamus tristique lacinia nisi. Morbi eleifend a velit vel pretium. Phasellus convallis, lacus quis vehicula finibus, lorem justo egestas tortor, eget dapibus est augue scelerisque ligula. Morbi ac pellentesque tellus. Integer ultrices luctus lectus a aliquet. Suspendisse nec ipsum posuere, iaculis sem ut, luctus neque. Quisque ut accumsan mi, nec convallis augue. Quisque ut cursus augue. Sed semper, nunc et tristique venenatis, neque felis vehicula mauris, vel molestie ante odio interdum orci. Donec malesuada volutpat enim, sed tincidunt dolor viverra eu. Mauris bibendum commodo dui blandit fringilla. Morbi semper tellus id pharetra viverra. Pellentesque consequat elit mi, ut scelerisque dolor laoreet a";
+    // payload.resize(targetPayloadBytes, 'A');
 
     m.payloadContainer.data = OctetString::FromAscii(payload);
 
@@ -176,7 +176,6 @@ void NasSm::sendCiotUserData(int psi)
 void NasSm::receiveForwardingFailure(const nas::SmMessage &msg, nas::EMmCause cause,
                                      const std::optional<nas::IEGprsTimer3> &backoffTimer)
 {
-    // TODO: other actions such as congestion control etc
 
     m_logger->err("SM forwarding failure for message type[%d] with cause[%s]", static_cast<int>(msg.messageType),
                   nas::utils::EnumToString(cause));
