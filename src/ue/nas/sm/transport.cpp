@@ -13,6 +13,9 @@
 #include <lib/nas/utils.hpp>
 #include <ue/nas/mm/mm.hpp>
 
+
+#include <cstdlib>
+#include <atomic>
 #include <chrono>
 
 namespace nr::ue
@@ -150,9 +153,30 @@ void NasSm::sendSmCause(const nas::ESmCause &cause, int pti, int psi)
 }
 
 
+
+static std::atomic<int> g_ciotSeq{0};
+
+static int getCiotEnvInt(const char *name, int defaultValue)
+{
+    const char *value = std::getenv(name);
+
+    if (value == nullptr)
+        return defaultValue;
+
+    try
+    {
+        return std::stoi(value);
+    }
+    catch (...)
+    {
+        return defaultValue;
+    }
+}
+
 static long long ciotNowUnixNs()
 {
     auto now = std::chrono::system_clock::now();
+
     auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
         now.time_since_epoch()
     ).count();
@@ -160,6 +184,95 @@ static long long ciotNowUnixNs()
     return static_cast<long long>(ns);
 }
 
+
+
+void NasSm::sendCiotUserData(int psi)
+{
+    const int minPayloadBytes =
+        getCiotEnvInt("CIOT_MIN_BYTES", 1024);
+
+    const int maxPayloadBytes =
+        getCiotEnvInt("CIOT_MAX_BYTES", 20 * 1024);
+
+    const int stepPayloadBytes =
+        getCiotEnvInt("CIOT_STEP_BYTES", 1024);
+
+    const int delayBetweenMessagesMs =
+        getCiotEnvInt("CIOT_DELAY_MS", 500);
+
+    if (minPayloadBytes <= 0 ||
+        maxPayloadBytes < minPayloadBytes ||
+        stepPayloadBytes <= 0 ||
+        delayBetweenMessagesMs < 0)
+    {
+        m_logger->err("Invalid CIoT experiment configuration");
+        return;
+    }
+
+    for (int targetPayloadBytes = minPayloadBytes;
+         targetPayloadBytes <= maxPayloadBytes;
+         targetPayloadBytes += stepPayloadBytes)
+    {
+        nas::UlNasTransport m;
+
+        m.payloadContainerType.payloadContainerType =
+            nas::EPayloadContainerType::CIOT_USER_DATA_CONTAINER;
+
+        int seq = g_ciotSeq.fetch_add(1);
+        long long txNs = ciotNowUnixNs();
+
+        std::string header =
+            "CIOT_TEST;"
+            "seq=" + std::to_string(seq) + ";" +
+            "len=" + std::to_string(targetPayloadBytes) + ";" +
+            "tx_ns=" + std::to_string(txNs) + ";" +
+            "data=";
+
+        if (header.size() > static_cast<std::size_t>(targetPayloadBytes))
+        {
+            m_logger->warn(
+                "CIoT header size[%d] exceeds requested payload size[%d]",
+                (int)header.size(),
+                targetPayloadBytes
+            );
+
+            continue;
+        }
+
+        std::string payload = header;
+
+        payload.append(
+            targetPayloadBytes - payload.size(),
+            'A'
+        );
+
+        m.payloadContainer.data =
+            OctetString::FromAscii(payload);
+
+        m.pduSessionId = nas::IEPduSessionIdentity2{};
+        m.pduSessionId->value = psi;
+
+        m_logger->info(
+            "Sending CIoT test payload seq[%d], bytes[%d], tx_ns[%lld]",
+            seq,
+            (int)payload.size(),
+            txNs
+        );
+
+        m_mm->deliverUlTransport(
+            m,
+            ENasTransportHint::FIVEG_SM_STATUS
+        );
+
+        std::this_thread::sleep_for(
+            std::chrono::milliseconds(delayBetweenMessagesMs)
+        );
+    }
+} 
+
+
+
+/*
 void NasSm::sendCiotUserData(int psi)
 {
     nas::UlNasTransport m;
@@ -167,14 +280,16 @@ void NasSm::sendCiotUserData(int psi)
     m.payloadContainerType.payloadContainerType =
         nas::EPayloadContainerType::CIOT_USER_DATA_CONTAINER;
 
-    // constexpr std::size_t targetPayloadBytes = 1 * 1024;
+    constexpr std::size_t targetPayloadBytes = 4 * 1024;
 
-    std::string userData = "CIOT_Lorem_Ipsum_TEST:Lorem ipsum dolor sit amet, consectetur adipiscing elit. Ut pharetra mattis fermentum. Aenean ac placerat odio. Curabitur sit amet fermentum nisl. Donec porttitor porta nisi, id auctor sem convallis ut. Integer aliquet nec mauris in sagittis. Fusce nec eros ut justo consequat sodales. Donec euismod a purus non congue. Fusce augue orci, fermentum nec facilisis eu, elementum et felis. Duis a nisi eu velit cursus facilisis. Praesent at vulputate mauris. Aliquam in diam non sapien pellentesque pulvinar. Donec molestie lectus sit amet ornare ultrices. Pellentesque ac est commodo, feugiat lectus nec, vestibulum sapien. Sed nisl dolor, accumsan a vestibulum ut, eleifend nec libero. In scelerisque laoreet tincidunt. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Cras tincidunt rutrum sapien ac hendrerit. Nullam volutpat enim non semper consectetur. In ac massa vel tortor lacinia tristique. Nullam rhoncus nulla pretium, tincidunt risus quis, pellentesque nibh. Phasellus lacinia vehicula orci sit amet feugiat. Praesent sit amet odio sed nisi pulvinar finibus. Proin blandit malesuada suscipit. Aliquam imperdiet tristique magna id iaculis. Curabitur magna justo, pulvinar in justo eget, ultrices tincidunt urna. Curabitur gravida nunc in aliquam ultrices. Proin tristique dolor sagittis risus sodales, eu iaculis ipsum interdum. Sed id sem auctor, ornare nibh sed, viverra dui. Fusce sed lectus dictum, tincidunt elit a, volutpat urna. Donec non massa lobortis, vulputate tortor vitae, iaculis quam. Quisque ut blandit felis, varius condimentum nunc. Vivamus auctor ligula quis nisl accumsan vulputate. Nam ac tortor nunc. Praesent maximus libero nulla, ac cursus nisi euismod condimentum. Cras at sem non urna accumsan mattis vel sed ligula. Ut quam leo, volutpat ut est vitae, molestie blandit nisi. Etiam elementum auctor dui ac elementum. Aliquam erat volutpat. Aenean vel ullamcorper nisi. Suspendisse pulvinar erat in augue bibendum vulputate. Phasellus facilisis augue lacus, eu efficitur mi faucibus at. Vivamus tristique lacinia nisi. Morbi eleifend a velit vel pretium. Phasellus convallis, lacus quis vehicula finibus, lorem justo egestas tortor, eget dapibus est augue scelerisque ligula. Morbi ac pellentesque tellus. Integer ultrices luctus lectus a aliquet. Suspendisse nec ipsum posuere, iaculis sem ut, luctus neque. Quisque ut accumsan mi, nec convallis augue. Quisque ut cursus augue. Sed semper, nunc et tristique venenatis, neque felis vehicula mauris, vel molestie ante odio interdum orci. Donec malesuada volutpat enim, sed tincidunt dolor viverra eu. Mauris bibendum commodo dui blandit fringilla. Morbi semper tellus id pharetra viverra. Pellentesque consequat elit mi, ut scelerisque dolor laoreet a";
-    // payload.resize(targetPayloadBytes, 'A');
+    std::string userData;
+    
+    
+    userData.resize(targetPayloadBytes, 'A');
     long long txNs = ciotNowUnixNs();
     
     std::string payload =
-    "CIOT_TEST;"
+    "CIOT_TEST_1KB;"
     "tx_ns=" + std::to_string(txNs) + ";" +
     "data=" + userData;
 
@@ -191,7 +306,7 @@ void NasSm::sendCiotUserData(int psi)
 
     m_mm->deliverUlTransport(m, ENasTransportHint::FIVEG_SM_STATUS);
 }
-
+*/
 void NasSm::receiveForwardingFailure(const nas::SmMessage &msg, nas::EMmCause cause,
                                      const std::optional<nas::IEGprsTimer3> &backoffTimer)
 {
